@@ -1,0 +1,20 @@
+# Build / IDE
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+# Generated media
+Temp/**
+!Temp/.gitkeep
+Output/**
+!Output/.gitkeep
+# Voice weights & runtime binaries (managed separately)
+Voices/**/*.onnx
+Voices/**/*.onnx.json
+Voices/**/*.json
+Runtime/
+# Operating system
+.DS_Store
+Thumbs.db

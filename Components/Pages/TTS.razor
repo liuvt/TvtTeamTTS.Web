@@ -1,0 +1,341 @@
+@page "/"
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@implements IAsyncDisposable
+@inject VoiceService VoiceCatalog
+@inject TextSplitterService Splitter
+@inject RenderService Renderer
+@inject SessionOutputService Sessions
+@inject IJSRuntime JS
+
+<div class="site-shell">
+    <header class="site-header">
+        <div class="layout-wide header-inner">
+            <a href="/" class="logo-lockup" aria-label="TVT Team - trang chủ">
+                <img src="/images/tvt-logo.png" alt="Logo TVT Team" />
+                <span class="brand-copy"><strong>TVT <span>TEAM</span></strong><small>TEXT TO SPEECH</small></span>
+            </a>
+            <nav class="header-nav" aria-label="Điều hướng">
+                <a href="#studio" class="current">Studio</a>
+                <a href="#how-it-works">Hướng dẫn</a>
+                <a href="#features">Tính năng</a>
+            </nav>
+            <div class="header-tools"><span class="server-status"><i></i> Offline engine</span><a class="header-cta" href="#studio">Tạo MP3 <span>↗</span></a></div>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero layout-wide">
+            <div class="hero-content">
+                <div class="eyebrow"><span class="eyebrow-spark">✦</span> TVT TEAM <span class="eyebrow-sep">/</span> AUDIO WORKSPACE <span class="eyebrow-version">v2.3</span></div>
+                <h1>Biến văn bản thành <span>giọng nói</span> chỉ trong vài bước.</h1>
+                <p class="hero-description">Công cụ tạo giọng đọc tiếng Việt cho truyện, video và nội dung sáng tạo. Nhập văn bản, chọn giọng, xuất MP3 — tất cả trên máy tính của bạn.</p>
+                <div class="hero-benefits"><span><b>✓</b> Không cần tài khoản</span><span><b>✓</b> Xử lý nội bộ</span><span><b>✓</b> Xuất MP3</span></div>
+            </div>
+            <div class="hero-terminal" aria-label="Thông tin công cụ">
+                <div class="terminal-top"><div class="traffic-lights"><i></i><i></i><i></i></div><span>TVT Team / local-studio</span><span class="terminal-version">v2.3</span></div>
+                <div class="terminal-body">
+                    <div class="terminal-prompt"><span>➜</span> tts / generate</div>
+                    <div><span class="terminal-key">nguồn</span><span class="terminal-value">Văn bản tiếng Việt</span></div>
+                    <div><span class="terminal-key">giọng đọc</span><span class="terminal-value">@voices.Count model khả dụng</span></div>
+                    <div><span class="terminal-key">đầu ra</span><span class="terminal-value terminal-accent">MP3 audio</span></div>
+                    <div class="terminal-ready"><span class="ready-dot"></span> Sẵn sàng nhận nội dung <span class="terminal-cursor"></span></div>
+                </div>
+            </div>
+        </section>
+
+        <div class="main-layout layout-wide">
+            <section id="studio" class="converter-card" aria-label="Studio chuyển văn bản thành giọng nói">
+                <div class="card-accent"></div>
+                <div class="studio-topline"><span><b class="topline-dot"></b> TVT TEAM / TEXT TO AUDIO</span><span class="studio-badge"><i></i> LOCAL STUDIO <b>v2.3</b></span></div>
+                <div class="studio-title-row">
+                    <div><div class="step-label">01 <span>/ NHẬP NỘI DUNG</span></div><h2>Văn bản cần chuyển đổi</h2><p>Dán nội dung muốn chuyển thành âm thanh. Hỗ trợ tối đa 50.000 ký tự mỗi lần.</p></div>
+                    <div class="character-counter" aria-live="polite"><strong id="tvt-char-count">0</strong><span> / 50.000 ký tự</span></div>
+                </div>
+
+                <div class="editor-wrap">
+                    <div class="editor-toolbar"><span class="editor-language"><span class="editor-status-dot"></span> TEXT INPUT <span class="editor-lang">· Tiếng Việt</span></span><div class="editor-actions"><button id="tvt-paste-button" type="button" title="Dán văn bản từ clipboard">↧ Dán văn bản</button><button id="tvt-clear-button" type="button" title="Xóa toàn bộ nội dung">✕ Xóa</button></div></div>
+                    <textarea id="tvt-text-editor" class="content-editor" aria-label="Nội dung văn bản chuyển thành giọng nói" spellcheck="false" placeholder="Nhập hoặc dán nội dung truyện, kịch bản, lời dẫn video hay bất kỳ văn bản tiếng Việt nào vào đây..."></textarea>
+                    <div class="editor-bottom"><span><span class="keyboard-symbol">⌨</span> Có thể dán văn bản dài, nội dung không bị cắt tự động</span><span id="tvt-word-count">0 từ</span></div>
+                </div>
+                <div class="counter-track" aria-hidden="true"><span id="tvt-counter-bar"></span></div>
+                <div id="tvt-input-warning" class="message message-error" role="alert" hidden style="display:none">
+                    <span class="message-icon">!</span><div><strong>Đã vượt giới hạn 50.000 ký tự</strong><p>Vượt <span id="tvt-excess-count">0</span> ký tự. Hãy rút ngắn nội dung để tạo MP3. Văn bản đã dán vẫn được giữ nguyên.</p></div>
+                </div>
+                <div id="tvt-paste-status" class="paste-status" role="status" hidden style="display:none"></div>
+
+                <div class="divider-soft"></div>
+                <div class="config-heading"><div><div class="step-label">02 <span>/ CÀI ĐẶT GIỌNG ĐỌC</span></div><h2>Tuỳ chỉnh âm thanh</h2><p>Chọn giọng phù hợp và tốc độ phát trước khi xuất tệp.</p></div><button type="button" class="refresh-button" @onclick="ReloadVoices" disabled="@busy"><span>↻</span> Quét lại giọng đọc</button></div>
+                <div class="config-grid">
+                    <div class="voice-settings">
+                        <div class="field"><label>Nhóm giọng đọc</label><div class="gender-group" role="group" aria-label="Nhóm giọng đọc">
+                            <button class="gender-option @(gender == "Nữ" ? "selected" : "")" type="button" @onclick='() => ChangeGender("Nữ")' disabled="@busy"><span class="gender-symbol">♀</span><span><strong>Nữ</strong><small>@FemaleCount model</small></span></button>
+                            <button class="gender-option @(gender == "Nam" ? "selected" : "")" type="button" @onclick='() => ChangeGender("Nam")' disabled="@busy"><span class="gender-symbol">♂</span><span><strong>Nam</strong><small>@MaleCount model</small></span></button>
+                            <button class="gender-option @(gender == "Khác" ? "selected" : "")" type="button" @onclick='() => ChangeGender("Khác")' disabled="@busy"><span class="gender-symbol">◇</span><span><strong>Khác</strong><small>@OtherCount model</small></span></button>
+                        </div></div>
+                        <div class="field"><label for="voice-select">Chọn model giọng</label><select id="voice-select" class="form-select" value="@SelectedVoiceKey" @onchange="OnVoiceSelect" disabled="@(busy || FilteredVoices.Count == 0)">
+                                @if (FilteredVoices.Count == 0)
+                                {
+                                    <option value="">Chưa có model thuộc nhóm @gender</option>
+                                }
+                                @foreach (var voice in FilteredVoices)
+                                {
+                                    <option value="@voice.ModelPath">@FriendlyName(voice) @(voice.IsMultiSpeaker ? $"({voice.NumSpeakers} speakers)" : "")</option>
+                                }
+                            </select>
+                            @if (SelectedVoice is not null)
+                            {
+                                <div class="field-help"><span class="small-check">✓</span> @SelectedVoice.Language <span class="field-separator">·</span> @SelectedVoice.Quality <span class="field-separator">·</span> @(SelectedVoice.IsMultiSpeaker ? $"{SelectedVoice.NumSpeakers} speakers" : "Sẵn sàng")</div>
+                            }
+                        </div>
+                    </div>
+                    <div class="audio-settings">
+                        <div class="field"><label for="speed-select">Tốc độ phát video</label><select id="speed-select" class="form-select" @bind="speedKey" disabled="@busy">
+                                <option value="0.25">0,25x — Rất chậm</option><option value="0.5">0,5x — Chậm</option><option value="0.75">0,75x — Hơi chậm</option><option value="1">1x — Mặc định</option><option value="1.25">1,25x — Hơi nhanh</option><option value="1.75">1,75x — Nhanh</option><option value="2">2x — Rất nhanh</option>
+                            </select><div class="field-help">Tốc độ sẽ được áp dụng trực tiếp khi tạo MP3.</div></div>
+                        @if (SelectedVoice?.IsMultiSpeaker == true)
+                        {
+                            <div class="field field-speaker">
+                                <label for="speaker-select">Người đọc (Speaker)</label>
+                                <select id="speaker-select" class="form-select" @bind="speakerId" disabled="@busy">
+                                    @foreach (var sp in SelectedVoice.Speakers)
+                                    {
+                                        <option value="@sp.Id">@sp.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        <div class="model-count"><span class="model-count-icon">♫</span><div><strong>@voices.Count giọng đọc đã nhận diện</strong><small>Nữ @FemaleCount <span>·</span> Nam @MaleCount <span>·</span> Khác @OtherCount</small></div></div>
+                    </div>
+                </div>
+
+                @if (busy || error.Length != 0 || result.Length != 0 || voices.Count == 0 || FilteredVoices.Count == 0)
+                {
+                    <section class="render-status" aria-live="polite">
+                        @if (voices.Count == 0)
+                        {
+                            <div class="message message-warning"><span class="message-icon">i</span><div><strong>Chưa tìm thấy model giọng đọc</strong><p>Thêm cặp file <code>.onnx</code> và <code>.onnx.json</code> vào <code>Voices/Nữ</code>, <code>Voices/Nam</code> hoặc <code>Voices/Khác</code>, sau đó chọn Quét lại giọng đọc.</p></div></div>
+                        }
+                        else if (FilteredVoices.Count == 0)
+                        {
+                            <div class="message message-warning"><span class="message-icon">i</span><div>Nhóm <strong>@gender</strong> chưa có giọng đọc. Chọn nhóm khác hoặc thêm model.</div></div>
+                        }
+                        @if (busy)
+                        {
+                            <div class="progress-title"><span><span class="working-spinner"></span> Đang tạo âm thanh...</span><strong>@done / @total đoạn</strong></div>
+                            <progress max="@Math.Max(1, total)" value="@done"></progress>
+                            <p class="progress-help">Vui lòng giữ tab đang mở cho đến khi hoàn tất.</p>
+                        }
+                        @if (error.Length != 0)
+                        {
+                            <div class="message message-error" role="alert"><span class="message-icon">!</span><div><strong>Không thể hoàn tất</strong><p>@error</p></div></div>
+                        }
+                        @if (result.Length != 0)
+                        {
+                            <div class="success-content"><span class="success-icon">✓</span><div><strong>Đã tạo MP3 thành công</strong><p>Tệp đã được gửi đến trình duyệt để tải xuống. Nếu trình duyệt chặn, bạn có thể tải thủ công.</p></div><a class="btn download-button" href="@DownloadUrl" download>↓ Tải MP3</a></div>
+                        }
+                    </section>
+                }
+
+                <div class="action-panel"><div class="action-info"><span class="action-label"><i></i> THÔNG TIN XUẤT FILE</span><div><b>@Characters.ToString("N0")</b> ký tự <span>·</span> <b>@SpeedDisplay</b> <span>·</span> @(SelectedVoice is null ? "Chưa chọn giọng" : FriendlyName(SelectedVoice))</div></div><div class="action-buttons">
+                    @if (busy)
+                    {
+                        <button class="btn btn-danger" type="button" @onclick="Cancel">■ Dừng render</button>
+                    }
+                    @if (!TooLong)
+                    {
+                        <button class="btn btn-primary" type="button" @onclick="RenderAsync" id="tvt-render-button" disabled="@(busy || readingEditor || Characters == 0 || SelectedVoice is null)"><span>✦</span> @(busy ? "Đang xử lý..." : "Tạo & tải MP3") <span>→</span></button>
+                    }
+                </div></div>
+                <div class="privacy-notice">♧ Xử lý nội bộ trên máy chủ của bạn. File đầu ra được dọn sau khi đóng tab hoặc khi phiên hết hạn.</div>
+            </section>
+        </div>
+
+        <section class="how-section layout-wide" id="how-it-works"><div class="how-title"><div class="step-label">HƯỚNG DẪN SỬ DỤNG</div><h2>3 bước. Không phức tạp.</h2><p>Quy trình tối giản dành cho người tạo nội dung.</p></div><div class="how-grid"><div><span class="how-no">01</span><h3>Dán văn bản</h3><p>Nhập nội dung của bạn vào khung soạn thảo. Theo dõi số ký tự ngay lập tức.</p></div><div><span class="how-no">02</span><h3>Chọn giọng đọc</h3><p>Chọn nhóm Nữ, Nam, Khác cùng model và tốc độ phù hợp.</p></div><div><span class="how-no">03</span><h3>Tải MP3</h3><p>Bấm tạo giọng đọc. Tệp MP3 được tải về khi xử lý hoàn tất.</p></div></div></section>
+        <section id="features" class="features-strip layout-wide"><span>● WORKFLOW / LOCAL FIRST</span><div><b>50.000 ký tự</b> mỗi lần xử lý <i>·</i> <b>3 nhóm giọng</b> quản lý linh hoạt <i>·</i> <b>MP3</b> sẵn sàng để dựng video</div></section>
+    </main>
+    <footer class="site-footer layout-wide"><div><img src="/images/tvt-logo.png" alt="" /> <b>TVT Team</b><span>© 2026 · Text to Speech Studio</span></div><p>Tạo nội dung tiếng Việt dễ dàng hơn.</p></footer>
+</div>
+
+@code {
+    private readonly string sessionId = Guid.NewGuid().ToString("N");
+    private List<VoiceModel> voices = [];
+    private string gender = "Nữ";
+    private int characterCount;
+    private int wordCount;
+    private DotNetObjectReference<TTS>? editorCallback;
+    private string speedKey = "1";
+    private string result = "";
+    private string error = "";
+    private string? selectedModelPath;
+    private int? speakerId;
+    private int done;
+    private int total = 1;
+    private bool busy;
+    private bool readingEditor;
+    private CancellationTokenSource? renderCancellation;
+
+    private int Characters => characterCount;
+    private bool TooLong => Characters > RenderService.MaxCharacters;
+    private int FemaleCount => voices.Count(v => v.Category == "Nữ");
+    private int MaleCount => voices.Count(v => v.Category == "Nam");
+    private int OtherCount => voices.Count(v => v.Category == "Khác");
+    private List<VoiceModel> FilteredVoices => voices.Where(v => v.Category == gender).ToList();
+    private VoiceModel? SelectedVoice => FilteredVoices.FirstOrDefault(v => v.ModelPath == selectedModelPath);
+    private string SelectedVoiceKey => SelectedVoice?.ModelPath ?? "";
+    private string SpeedDisplay => speedKey.Replace('.', ',') + "x";
+    private string DownloadUrl => $"/download/{sessionId}/{Uri.EscapeDataString(result)}";
+
+    protected override void OnInitialized()
+    {
+        Sessions.Register(sessionId);
+        ReloadVoices();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            editorCallback = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("tvtStudio.register", sessionId, editorCallback);
+        }
+    }
+
+    // Chỉ đồng bộ SỐ ĐẾM (vài byte) lên Blazor. Không chuyển toàn bộ textarea
+    // qua SignalR mỗi khi nhập hay dán: vượt ngưỡng ~32 KB sẽ làm mất kết nối.
+    [JSInvokable]
+    public Task UpdateEditorStats(int characters, int words) => InvokeAsync(() =>
+    {
+        characterCount = Math.Max(0, characters);
+        wordCount = Math.Max(0, words);
+        StateHasChanged();
+    });
+
+    private void ReloadVoices()
+    {
+        var previous = selectedModelPath;
+        voices = VoiceCatalog.GetVoices();
+        if (previous is not null && FilteredVoices.Any(v => v.ModelPath == previous))
+            selectedModelPath = previous;
+        else
+            SelectPreferredVoice();
+        VoiceChanged();
+    }
+
+    private void ChangeGender(string category)
+    {
+        gender = category;
+        SelectPreferredVoice();
+        VoiceChanged();
+    }
+
+    private void SelectPreferredVoice()
+    {
+        var options = FilteredVoices;
+        selectedModelPath = (gender == "Nữ"
+            ? options.FirstOrDefault(v =>
+                (v.Name + v.ModelPath).Contains("ngochuyen", StringComparison.OrdinalIgnoreCase) ||
+                (v.Name + v.ModelPath).Contains("ngọc huyền", StringComparison.OrdinalIgnoreCase) ||
+                (v.Name + v.ModelPath).Contains("ngoc_huyen", StringComparison.OrdinalIgnoreCase))
+            : null)?.ModelPath ?? options.FirstOrDefault()?.ModelPath;
+    }
+
+    private void OnVoiceSelect(ChangeEventArgs args)
+    {
+        selectedModelPath = args.Value?.ToString();
+        VoiceChanged();
+    }
+
+    private void VoiceChanged() => speakerId = SelectedVoice?.IsMultiSpeaker == true
+        ? SelectedVoice.Speakers.FirstOrDefault()?.Id ?? 0 : null;
+
+    private static string FriendlyName(VoiceModel voice)
+    {
+        var key = (voice.Name + " " + Path.GetFileNameWithoutExtension(voice.ModelPath)).ToLowerInvariant();
+        if (key.Contains("ngochuyennew")) return "Ngọc Huyền New";
+        if (key.Contains("ngochuyen")) return "Ngọc Huyền";
+        if (key.Contains("ngocngan")) return "Ngọc Ngạn";
+        if (key.Contains("manhdung")) return "Mạnh Dũng";
+        if (key.Contains("taian")) return "Tài An";
+        if (key.Contains("maiphuong")) return "Mai Phương";
+        if (key.Contains("phuongtrang")) return "Phương Trang";
+        if (key.Contains("mytam")) return "Mỹ Tâm";
+        return voice.Name;
+    }
+
+    private async Task RenderAsync()
+    {
+        var voice = SelectedVoice;
+        if (voice is null || busy || readingEditor) return;
+
+        readingEditor = true;
+        // Chỉ lấy text ở thời điểm bấm render; JS từ chối gửi nếu > 50.000 ký tự.
+        // Dùng kiểm tra phía máy chủ như hàng rào thứ hai, tránh vượt giới hạn.
+        string input;
+        try { input = await JS.InvokeAsync<string>("tvtStudio.getEditorText"); }
+        catch (JSException ex)
+        {
+            error = ex.Message.Contains("50000", StringComparison.Ordinal)
+                ? "Nội dung vượt quá 50.000 ký tự. Vui lòng rút ngắn trước khi tạo MP3."
+                : "Không thể đọc nội dung trong trình duyệt: " + ex.Message;
+            return;
+        }
+        finally { readingEditor = false; }
+
+        characterCount = Splitter.CharacterCount(input);
+        wordCount = Splitter.WordCount(input);
+        if (TooLong)
+        {
+            error = "Nội dung vượt quá 50.000 ký tự. Vui lòng rút ngắn trước khi tạo MP3.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            error = "Vui lòng nhập nội dung trước khi tạo MP3.";
+            return;
+        }
+
+        busy = true;
+        result = error = "";
+        done = 0;
+        total = 1;
+        renderCancellation = new CancellationTokenSource();
+        try
+        {
+            var speed = double.Parse(speedKey, System.Globalization.CultureInfo.InvariantCulture);
+            var progress = new Progress<(int done, int total)>(p =>
+            {
+                done = p.done;
+                total = p.total;
+                _ = InvokeAsync(StateHasChanged);
+            });
+            result = await Renderer.RenderAsync(input, voice, speed, speakerId, sessionId, progress, renderCancellation.Token);
+            try
+            {
+                // Chỉ gọi một lần sau khi RenderAsync thực sự hoàn tất.
+                await JS.InvokeVoidAsync("tvtStudio.download", DownloadUrl);
+            }
+            catch (JSException)
+            {
+                error = "Trình duyệt không tự động tải tệp. Hãy chọn 'Tải MP3' bên dưới.";
+            }
+        }
+        catch (OperationCanceledException) { error = "Đã dừng quá trình tạo MP3."; }
+        catch (Exception ex) { error = ex.Message; }
+        finally
+        {
+            busy = false;
+            renderCancellation?.Dispose();
+            renderCancellation = null;
+        }
+    }
+
+    private void Cancel() => renderCancellation?.Cancel();
+
+    public ValueTask DisposeAsync()
+    {
+        renderCancellation?.Cancel();
+        Sessions.Close(sessionId);
+        editorCallback?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}
